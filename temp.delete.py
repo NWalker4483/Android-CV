@@ -4,6 +4,7 @@ import subprocess as sp
 import array
 import numpy as np 
 import cv2
+
 # NOTE: Creating my own tool as MonkeyRunner provides approx. 4 fps in others experiments
 class Android(Thread):    
     def __init__(self):
@@ -11,8 +12,14 @@ class Android(Thread):
         self.daemon = True
         self.fps = 0.0
         self.screen = np.zeros((3,3))
-        
-        #self.__reader = cap = cv2.VideoCapture('temp.h264')
+        adbCmd = ['adb', 'exec-out', 'screenrecord', '--output-format=h264', '-']
+    	stream = sp.Popen(adbCmd, stdout = sp.PIPE)
+
+    	ffmpegCmd =['ffmpeg', '-i', '-', 
+		'-f', 'rawvideo', '-vf', 'scale=324:576', 
+    		'-vcodec', 'bmp',  '-']
+    	self.__ffmpeg = sp.Popen(ffmpegCmd, stdin = stream.stdout, stdout = sp.PIPE)
+
         # TODO: Remove Time Limit --time-limit 
         "sudo apt-get install ffmpeg"
         # Capture
@@ -35,28 +42,19 @@ class Android(Thread):
         pass
     def get_screen(self):
         # Reads in latest frame to 'screen' variable
-        #self.__reader.set(cv2.CAP_PROP_POS_FRAMES, self.__reader.get(cv2.CAP_PROP_FRAME_COUNT)-1)
-        #self.screen = self.__reader.read()[1]
-        pass
+	fileSizeBytes = self.ffmpeg.stdout.read(6)
+        fileSize = 0
+        for i in range(4):
+            fileSize += array.array('B',fileSizeBytes[i + 2])[0] * 256 ** i
+        bmpData = fileSizeBytes + ffmpeg.stdout.read(fileSize - 6)
+        self.screen = cv2.imdecode(np.fromstring(bmpData, dtype = np.uint8), 1)
     def run(self):
         self.get_screen()
         pass
     def __delattr__(self, name):
         return super().__delattr__(name)
 if __name__ == "__main__":
-    adbCmd = ['adb', 'exec-out', 'screenrecord', '--output-format=h264', '-']
-    stream = sp.Popen(adbCmd, stdout = sp.PIPE)
-
-    ffmpegCmd =['ffmpeg', '-i', '-', '-f', 'rawvideo', '-vf', 'scale=324:576', 
-    '-vcodec', 'bmp',  '-']
-    ffmpeg = sp.Popen(ffmpegCmd, stdin = stream.stdout, stdout = sp.PIPE)
-
+    droid = Android()
     while True:
-        fileSizeBytes = ffmpeg.stdout.read(6)
-        fileSize = 0
-        for i in range(4):
-            fileSize += array.array('B',fileSizeBytes[i + 2])[0] * 256 ** i
-        bmpData = fileSizeBytes + ffmpeg.stdout.read(fileSize - 6)
-        image = cv2.imdecode(np.fromstring(bmpData, dtype = np.uint8), 1)
-        cv2.imshow("im",image) 
+        cv2.imshow("im",droid.screen) 
         cv2.waitKey(25)
