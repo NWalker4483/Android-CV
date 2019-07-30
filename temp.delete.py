@@ -8,20 +8,24 @@ import cv2
 # SAMPLE COMMAND
 # adb shell screenrecord --bit-rate=16m --output-format=h264 --size 540x960 - | ffplay -framerate 60 -probesize 32 -sync video -
 class Android(Thread):    
+    #TODO: Add proper kill function 
     def __init__(self):
         Thread.__init__(self)
         self.daemon = True
         self.fps = 0.0
+	self.kill = False
         self.screen = np.zeros((3,3))
-        self.screen_shape = (1075, 2215)
-        adbCmd = ['adb', 'exec-out', 'screenrecord', '--output-format=h264', '--bit-rate=16m', '-']#  '--size 540x960',
-        stream = sp.Popen(adbCmd, stdout = sp.PIPE)
+        self.screen_shape = (1075, 2215) # Add Code to get from phone 
+        adbCmd = ['adb', 'exec-out', 'screenrecord', '--output-format=h264',  '-']
+	#  '--size 540x960', '--bit-rate=16m',
+        stream = sp.Popen(adbCmd, stdout = sp.PIPE)#,shell=True)
         
         ffmpegCmd =['ffmpeg', '-i', '-',
         '-f', 'rawvideo', '-vf', 'scale=324:576',
         '-framerate','60',
         '-vcodec', 'bmp',  '-']
-        self.__ffmpeg = sp.Popen(ffmpegCmd, stdin = stream.stdout, stdout = sp.PIPE)
+        self.__ffmpeg = sp.Popen(ffmpegCmd, stdin = stream.stdout, stdout = sp.PIPE)#,shell=True)
+	# NOTE: Limit is unknown
         # TODO: Remove Time Limit --time-limit 
         self.start()
     def touch(self, pos):
@@ -43,26 +47,34 @@ class Android(Thread):
         sp.call(["adb", "shell", "input", "touchscreen", "swipe", x1, y1, x2, y2], shell=True)
 
     def read_screen(self):
+	# TODO: Add Stack Overflow Link
         # Reads in latest frame to 'screen' variable
-        fileSizeBytes = self.__ffmpeg.stdout.read(6)
-        fileSize = 0
-        for i in range(4):
-            fileSize += array.array('B',fileSizeBytes[i + 2])[0] * 256 ** i
-        bmpData = fileSizeBytes + self.__ffmpeg.stdout.read(fileSize - 6)
-        
-        self.screen = cv2.imdecode(np.fromstring(bmpData, dtype = np.uint8), 1)
-    def run(self):
+	try:
+        	fileSizeBytes = self.__ffmpeg.stdout.read(6)
+        	fileSize = 0
+       		for i in range(4):
+        	    fileSize += array.array('B',fileSizeBytes[i + 2])[0] * 256 ** i
+        	bmpData = fileSizeBytes + self.__ffmpeg.stdout.read(fileSize - 6)
+        	self.screen = cv2.imdecode(np.fromstring(bmpData, dtype = np.uint8), 1)
+	except Exception as e:
+		print(e)
+		print("Screen Capture Failed")
+		self.kill = True
+		#self.screen = np.zeros((500,500))
+    def run(self):	
         while True:
-            self.read_screen()
+		if self.kill == True:
+			break
+            	self.read_screen()
 if __name__ == "__main__":
     droid = Android()
     try:
         while True:
             cv2.imshow("Phone Screen",droid.screen) 
-            if cv2.waitKey(0) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 droid.touch((50,50))
     except:
-        pass
+        exit()
 ## Capture
 # adb exec-out screenrecord --bit-rate=16m --output-format=h264 --size 800x600 - |
 # adb shell screenrecord --bit-rate=16m --output-format=h264 --size 540x960 - |
